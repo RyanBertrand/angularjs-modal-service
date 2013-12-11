@@ -1,133 +1,192 @@
 angular.module('fundoo.services', []).factory('createDialog', ["$document", "$compile", "$rootScope", "$controller", "$timeout",
-  function ($document, $compile, $rootScope, $controller, $timeout) {
-    var defaults = {
-      id: null,
-      template: null,
-      templateUrl: null,
-      title: 'Default Title',
-      backdrop: true,
-      success: {label: 'OK', fn: null},
-      cancel: {label: 'Close', fn: null},
-      controller: null, //just like route controller declaration
-      backdropClass: "modal-backdrop",
-      footerTemplate: null,
-      modalClass: "modal",
-      css: {
-        top: '100px',
-        left: '30%',
-        margin: '0 auto'
-      },
-      showHeader: true
-    };
-    var body = $document.find('body');
+    function ($document, $compile, $rootScope, $controller, $timeout) {
+        var defaults = {
+            id: null,
+            template: null,
+            templateUrl: null,
+            title: 'Default Title',
+            backdrop: true,
+            success: {label: 'OK', fn: null},
+            cancel: {label: 'Close', fn: null},
+            controller: null, //just like route controller declaration
+            backdropClass: "modal-backdrop",
+            footerTemplate: null,
+            modalClass: "modal",
+            css: {
 
-    return function Dialog(templateUrl/*optional*/, options, passedInLocals) {
+            },
+            showHeader: false,
+            showHeaderCloseButton: true,
+            removeOnDismiss: true,
+            allowKeyboardDismiss: true,
+            allowBackdropDismiss: true
+        };
+        var body = $document.find('body');
 
-      // Handle arguments if optional template isn't provided.
-      if(angular.isObject(templateUrl)){
-        passedInLocals = options;
-        options = templateUrl;
-      } else {
-        options.templateUrl = templateUrl;
-      }
+        return function Dialog(templateUrl/*optional*/, options, passedInLocals) {
 
-      options = angular.extend({}, defaults, options); //options defined in constructor
+            // Handle arguments if optional template isn't provided.
+            if (angular.isObject(templateUrl)) {
+                passedInLocals = options;
+                options = templateUrl;
+            } else {
+                options.templateUrl = templateUrl;
+            }
 
-      var key;
-      var idAttr = options.id ? ' id="' + options.id + '" ' : '';
-      var defaultFooter = '<button class="btn" ng-click="$modalCancel()">{{$modalCancelLabel}}</button>' +
-        '<button class="btn btn-primary" ng-click="$modalSuccess()">{{$modalSuccessLabel}}</button>';
-      var footerTemplate = '<div class="modal-footer">' +
-        (options.footerTemplate || defaultFooter) +
-        '</div>';
-      var modalBody = (function(){
-        if(options.template){
-          if(angular.isString(options.template)){
-            // Simple string template
-            return '<div class="modal-body">' + options.template + '</div>';
-          } else {
-            // jQuery/JQlite wrapped object
-            return '<div class="modal-body">' + options.template.html() + '</div>';
-          }
-        } else {
-          // Template url
-          return '<div class="modal-body" ng-include="\'' + options.templateUrl + '\'"></div>'
-        }
-      })();
-      //We don't have the scope we're gonna use yet, so just get a compile function for modal
-      var modalEl = angular.element(
-        '<div class="' + options.modalClass + ' fade"' + idAttr + '>' +
-        if(options.showHeader){
-          '  <div class="modal-header">' +
-        }
-        else{
-          '<div style="height: 10px; padding-right: 10px">' +
-        }
-          '    <button type="button" class="close" ng-click="$modalCancel()">&times;</button>' +
-          if(options.showHeader){
-          '    <h2>{{$title}}</h2>' +
-          }
-          '  </div>' +
-          modalBody +
-          footerTemplate +
-          '</div>');
+            options = angular.extend({}, defaults, options); //options defined in constructor
 
-      for(key in options.css) {
-        modalEl.css(key, options.css[key]);
-      }
+            //Do we have an ID element?
+            if (!options.id) {
+                //Set the id to a random to not clash with other elements
+                options.id = 'modal-' + Date.now().toString();
+            }
 
-      var backdropEl = angular.element('<div ng-click="$modalCancel()">');
-      backdropEl.addClass(options.backdropClass);
-      backdropEl.addClass('fade in');
+            //DOM Builders
+            var buildModalDismissOptions = function () {
+                var dismissOptions = '';
+                if (!options.allowBackdropDismiss) {
+                    dismissOptions = ' data-backdrop="static" ';
+                }
+                if (!options.allowKeyboardDismiss) {
+                    //For built in Boostrap ESC support
+                    dismissOptions = dismissOptions + ' data-keyboard="false" ';
+                }
 
-      var handleEscPressed = function (event) {
-        if (event.keyCode === 27) {
-          scope.$modalCancel();
-        }
-      };
+                return dismissOptions;
+            };
 
-      var closeFn = function () {
-        body.unbind('keydown', handleEscPressed);
-        modalEl.remove();
-        if (options.backdrop) {
-          backdropEl.remove();
-        }
-      };
+            var buildModalHeader = function () {
+                if (options.showHeader) {
+                    return '  <div class="modal-header">';
+                }
+                else {
+                    //Add some padding for the close button
+                    if (options.showHeaderCloseButton) {
+                        return '<div style="height: 22px; padding-right: 10px">';
+                    }
+                    else {
+                        return '<div>';
+                    }
+                }
+            };
 
-      body.bind('keydown', handleEscPressed);
+            var buildModalBody = function () {
+                if (options.template) {
+                    if (angular.isString(options.template)) {
+                        // Simple string template
+                        return '<div class="modal-body">' + options.template + '</div>';
+                    } else {
+                        // jQuery/JQlite wrapped object
+                        return '<div class="modal-body">' + options.template.html() + '</div>';
+                    }
+                } else {
+                    // Template url
+                    return '<div class="modal-body" ng-include="\'' + options.templateUrl + '\'"></div>'
+                }
+            };
 
-      var ctrl, locals,
-        scope = options.scope || $rootScope.$new();
+            var buildModalFooter = function () {
+                var footerContents = null;
+                if (options.footerTemplate) {
+                    footerContents = options.footerTemplate;
+                }
+                else {
+                    //Default Footer
+                    footerContents = '<button class="btn" ng-click="$modalCancel()">{{$modalCancelLabel}}</button>' +
+                        '<button class="btn btn-primary" ng-click="$modalSuccess()">{{$modalSuccessLabel}}</button>';
+                }
 
-      scope.$title = options.title;
-      scope.$modalClose = closeFn;
-      scope.$modalCancel = function () {
-        var callFn = options.cancel.fn || closeFn;
-        callFn.call(this);
-        scope.$modalClose();
-      };
-      scope.$modalSuccess = function () {
-        var callFn = options.success.fn || closeFn;
-        callFn.call(this);
-        scope.$modalClose();
-      };
-      scope.$modalSuccessLabel = options.success.label;
-      scope.$modalCancelLabel = options.cancel.label;
-      
-      if (options.controller) {
-        locals = angular.extend({$scope: scope}, passedInLocals);
-        ctrl = $controller(options.controller, locals);
-        // Yes, ngControllerController is not a typo
-        modalEl.contents().data('$ngControllerController', ctrl);
-      }
+                return '<div class="modal-footer">' +
+                    footerContents +
+                    '</div>';
+            };
 
-      $compile(modalEl)(scope);
-      $compile(backdropEl)(scope);
-      body.append(modalEl);
-      if (options.backdrop) body.append(backdropEl);
+            var key;
+            var idAttr = ' id="' + options.id + '" ';
+            var modalElementID = '#' + options.id;
 
-      $timeout(function () {
-        modalEl.addClass('in');
-      }, 200);
-    };
-  }]);
+            var dismissOptions = buildModalDismissOptions();
+            var modalHeader = buildModalHeader();
+            var modalBody = buildModalBody();
+            var modalFooter = buildModalFooter();
+
+            //We don't have the scope we're gonna use yet, so just get a compile function for modal
+            var modalEl = angular.element(
+                '<div class="' + options.modalClass + ' fade"' + idAttr + dismissOptions + '>' +
+                    '<div class="modal-dialog"><div class="modal-content">' +
+                    modalHeader +
+                    '    <button ng-show="$showHeaderCloseButton" type="button" class="close" ng-click="$modalCancel()">&times;</button>' +
+                    '    <h2 ng-show="$showHeader">{{$title}}</h2>' +
+                    '  </div>' +
+                    modalBody +
+                    modalFooter +
+                    '</div></div></div>');
+
+            for (key in options.css) {
+                modalEl.css(key, options.css[key]);
+            }
+
+            var handleEscPressed = function (event) {
+                if (event.keyCode === 27) {
+                    scope.$modalCancel();
+                }
+            };
+
+            var closeFn = function () {
+                if (options.allowKeyboardDismiss) {
+                    body.unbind('keydown', handleEscPressed);
+                }
+
+                $(modalElementID).modal('hide');
+            };
+
+            if (options.allowKeyboardDismiss) {
+                body.bind('keydown', handleEscPressed);
+            }
+
+
+            var ctrl, locals,
+                scope = options.scope || $rootScope.$new();
+
+            scope.$title = options.title;
+            scope.$showHeader = options.showHeader;
+            scope.$showHeaderCloseButton = options.showHeaderCloseButton;
+            scope.$modalClose = closeFn;
+            scope.$modalCancel = function () {
+                var callFn = options.cancel.fn || closeFn;
+                callFn.call(this);
+                scope.$modalClose();
+            };
+            scope.$modalSuccess = function () {
+                var callFn = options.success.fn || closeFn;
+                callFn.call(this);
+                scope.$modalClose();
+            };
+            scope.$modalSuccessLabel = options.success.label;
+            scope.$modalCancelLabel = options.cancel.label;
+
+            if (options.controller) {
+                locals = angular.extend({$scope: scope}, passedInLocals);
+                ctrl = $controller(options.controller, locals);
+                // Yes, ngControllerController is not a typo
+                modalEl.contents().data('$ngControllerController', ctrl);
+            }
+
+            $compile(modalEl)(scope);
+            body.append(modalEl);
+
+            $timeout(function () {
+                $(modalElementID).modal('show');
+            }, 200);
+
+
+            if (options.removeOnDismiss) {
+                //Setup the Bootstrap callback to remove from the modal when dismissed
+                $(modalElementID).on('hidden.bs.modal', function () {
+                    //Remove from the DOM
+                    var elem = document.getElementById(options.id);
+                    elem.parentNode.removeChild(elem);
+                });
+            }
+        };
+    }]);
